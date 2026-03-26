@@ -21,6 +21,9 @@ class Task:
     duration_minutes: int
     priority: str   # "high", "medium", or "low"
     category: str   # e.g. "walk", "feeding", "meds", "grooming"
+    # Pet has no direct link to Task in the UML, so tasks apply to all pets by default.
+    # To make a task pet-specific (e.g. meds only for dogs), add: species: str | None = None
+    # then filter in generate_plan: task.species is None or task.species == owner.pet.species
 
 
 class Scheduler:
