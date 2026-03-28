@@ -12,6 +12,10 @@ class Task:
     # Note: is_complete is never auto-reset — for recurring tasks (e.g. daily walks),
     # you'll need to reset this between planning sessions manually.
 
+    def mark_complete(self) -> None:
+        """Mark this task as complete."""
+        self.is_complete = True
+
 
 class Pet:
     def __init__(self, name: str, species: str, age: int):
@@ -25,16 +29,13 @@ class Pet:
         self.tasks.append(task)
 
     def remove_task(self, task: Task) -> None:
-        """Remove a task from this pet's task list.
-        Raise ValueError if the task is not found."""
+        """Remove a task from this pet's task list, or raise ValueError if not found."""
         if task not in self.tasks:
             raise ValueError(f"Task '{task.name}' not found.")
         self.tasks.remove(task)
 
     def edit_task(self, old: Task, updated: Task) -> None:
-        """Replace old task with updated task.
-        Raise ValueError if old task is not found.
-        Note: if called after generate_plan, self.plan becomes stale — regenerate the plan."""
+        """Replace old task with updated task, or raise ValueError if old task is not found."""
         if old not in self.tasks:
             raise ValueError(f"Task '{old.name}' not found.")
         index = self.tasks.index(old)
@@ -53,9 +54,7 @@ class Owner:
         self.pets.append(pet)
 
     def remove_pet(self, pet: Pet) -> None:
-        """Remove a pet from the owner's pet list.
-        Raise ValueError if the pet is not found.
-        Note: tasks from this pet may still exist in Scheduler.plan — regenerate the plan after removal."""
+        """Remove a pet from the owner's pet list, or raise ValueError if not found."""
         if pet not in self.pets:
             raise ValueError(f"Pet '{pet.name}' not found.")
         self.pets.remove(pet)
@@ -70,16 +69,7 @@ class Scheduler:
         self.plan: list[Task] = []
 
     def generate_plan(self) -> list[Task]:
-        """
-        Aggregate tasks from all owner.pets, filter out completed tasks,
-        sort by priority (high → medium → low), then greedily select tasks
-        that fit within owner.available_minutes.
-        Stores tasks that didn't fit in skipped_tasks.
-        Returns the ordered list of selected tasks.
-
-        Note: reset self.plan and self.skipped_tasks at the start to avoid stale data from prior calls.
-        Use a local 'remaining' counter — never mutate owner.available_minutes directly.
-        """
+        """Build a priority-sorted task plan that fits within the owner's available time budget."""
         self.plan = []
         self.skipped_tasks = []
 
@@ -112,14 +102,8 @@ class Scheduler:
 
         return self.plan
 
-    def explain_plan(self) -> str:
-        """
-        Returns a human-readable string explaining why each task was
-        included or excluded.
-
-        Note: depends on self.plan and self.skipped_tasks being populated.
-        Call generate_plan() first, or guard with an early return if self.plan is empty.
-        """
+    def explain_plan(self, all_tasks: list) -> str:
+        """Return a human-readable summary of which tasks were included or skipped and why."""
         if not self.plan and not self.skipped_tasks:
             return "No plan generated yet. Call generate_plan() first."
 
@@ -127,11 +111,15 @@ class Scheduler:
 
         explanation += "Tasks included in the plan:\n"
         for task in self.plan:
-            explanation += f"  - {task.name} ({task.priority} priority, {task.duration_minutes} min) — fits within time budget\n"
+            index = all_tasks.index(task)
+            explanation += f"  {index}. {task.name} ({task.priority} priority, {task.duration_minutes} min) — fits within time budget\n"
 
         if self.skipped_tasks:
             explanation += "\nTasks skipped:\n"
             for task in self.skipped_tasks:
-                explanation += f"  - {task.name} ({task.priority} priority, {task.duration_minutes} min) — not enough time remaining\n"
+                index = all_tasks.index(task)
+                explanation += f"  {index}. {task.name} ({task.priority} priority, {task.duration_minutes} min) — not enough time remaining\n"
+
+        explanation += "\nTasks are organized by priority (high → medium → low), ensuring the most important care gets done first within the available time budget.\n"
 
         return explanation

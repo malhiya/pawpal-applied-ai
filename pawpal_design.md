@@ -11,6 +11,7 @@ classDiagram
         - category: str
         - frequency: str
         - is_complete: bool
+        + mark_complete()
     }
 
     class Pet {
@@ -59,6 +60,8 @@ classDiagram
 │ - frequency: str            │
 │   (daily, weekly, etc.)     │
 │ - is_complete: bool         │
+├─────────────────────────────┤
+│ + mark_complete()           │
 └─────────────────────────────┘
           △ owns many
           │
