@@ -8,6 +8,8 @@ class Task:
     priority: str       # "high", "medium", or "low"
     category: str       # e.g. "walk", "feeding", "meds", "grooming"
     frequency: str      # e.g. "daily", "weekly"
+    scheduled_time: str = "08:00"  # 24-hour format, e.g. "08:00", "14:30"
+    scheduled_day: str = "Monday"  # for weekly tasks: which day of the week
     is_complete: bool = False
     # Note: is_complete is never auto-reset — for recurring tasks (e.g. daily walks),
     # you'll need to reset this between planning sessions manually.
@@ -123,3 +125,24 @@ class Scheduler:
         explanation += "\nTasks are organized by priority (high → medium → low), ensuring the most important care gets done first within the available time budget.\n"
 
         return explanation
+
+    def generate_weekly_schedule(self) -> dict[str, list[Task]]:
+        """Return a dict mapping each day of the week to its list of tasks, sorted by scheduled_time.
+        Only includes tasks that fit within the time budget (skipped tasks are excluded)."""
+        if not self.plan:
+            self.generate_plan()
+
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        schedule: dict[str, list[Task]] = {day: [] for day in days}
+
+        for task in self.plan:
+            if task.frequency == "daily":
+                for day in days:
+                    schedule[day].append(task)
+            elif task.frequency == "weekly" and task.scheduled_day in schedule:
+                schedule[task.scheduled_day].append(task)
+
+        for day in days:
+            schedule[day].sort(key=lambda t: t.scheduled_time)
+
+        return schedule

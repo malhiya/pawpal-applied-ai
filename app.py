@@ -94,8 +94,26 @@ else:
         with col3:
             priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            frequency = st.selectbox("Frequency", ["daily", "weekly"])
+        with col5:
+            import datetime
+            scheduled_time = st.time_input("Time", value=datetime.time(8, 0))
+        with col6:
+            days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            scheduled_day = st.selectbox("Day (weekly only)", days_of_week, disabled=(frequency == "daily"))
+
         if st.button("Add task"):
-            new_task = Task(name=task_title, duration_minutes=int(duration), priority=priority, category="general", frequency="daily")
+            new_task = Task(
+                name=task_title,
+                duration_minutes=int(duration),
+                priority=priority,
+                category="general",
+                frequency=frequency,
+                scheduled_time=scheduled_time.strftime("%H:%M"),
+                scheduled_day=scheduled_day,
+            )
             selected_pet.add_task(new_task)
 
         if selected_pet.tasks:
@@ -127,3 +145,38 @@ else:
             scheduler = Scheduler(temp_owner)
             plan = scheduler.generate_plan()
             st.write(scheduler.explain_plan(selected_pet.tasks))
+
+        st.divider()
+        st.subheader("Weekly Schedule")
+        if st.button("Generate weekly schedule"):
+            temp_owner = Owner(selected_owner.name, selected_owner.available_minutes)
+            temp_owner.add_pet(selected_pet)
+            scheduler = Scheduler(temp_owner)
+            weekly = scheduler.generate_weekly_schedule()
+
+            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+            # collect all unique times across the week, sorted
+            all_times = sorted({task.scheduled_time for day_tasks in weekly.values() for task in day_tasks})
+
+            if not all_times:
+                st.info("No tasks scheduled yet.")
+            else:
+                # header row: Time | Mon | Tue | ...
+                header_cols = st.columns([1] + [2] * 7)
+                header_cols[0].markdown("**Time**")
+                for i, day in enumerate(days):
+                    header_cols[i + 1].markdown(f"**{day[:3]}**")
+
+                st.divider()
+
+                # one row per unique time slot
+                for time_slot in all_times:
+                    row_cols = st.columns([1] + [2] * 7)
+                    row_cols[0].markdown(f"`{time_slot}`")
+                    for i, day in enumerate(days):
+                        tasks_at_time = [t for t in weekly[day] if t.scheduled_time == time_slot]
+                        if tasks_at_time:
+                            row_cols[i + 1].write("\n".join(t.name for t in tasks_at_time))
+                        else:
+                            row_cols[i + 1].caption("—")
