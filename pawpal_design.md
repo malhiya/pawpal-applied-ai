@@ -10,6 +10,8 @@ classDiagram
         - priority: str
         - category: str
         - frequency: str
+        - scheduled_time: str
+        - scheduled_day: str
         - is_complete: bool
         + mark_complete()
     }
@@ -38,6 +40,7 @@ classDiagram
         - plan: list[Task]
         + generate_plan() list[Task]
         + explain_plan() str
+        + generate_weekly_schedule() dict[str, list[Task]]
     }
 
     Owner "1" --> "many" Pet : manages
@@ -59,6 +62,10 @@ classDiagram
 │ - category: str             │
 │ - frequency: str            │
 │   (daily, weekly, etc.)     │
+│ - scheduled_time: str       │
+│   (24h format, e.g. "08:00")│
+│ - scheduled_day: str        │
+│   (e.g. "Monday")           │
 │ - is_complete: bool         │
 ├─────────────────────────────┤
 │ + mark_complete()           │
@@ -110,6 +117,8 @@ classDiagram
 │ + generate_plan(): list     │
 │   [Task]                    │
 │ + explain_plan(): str       │
+│ + generate_weekly_schedule()│
+│   : dict[str, list[Task]]   │
 └─────────────────────────────┘
 ```
 
@@ -127,6 +136,15 @@ classDiagram
 4. Greedily add tasks until `available_minutes` is exhausted
 5. Store tasks that didn't fit in `skipped_tasks`
 6. Return the selected tasks as an ordered list
+
+## Weekly Schedule Logic (generate_weekly_schedule)
+
+1. Call `generate_plan()` if no plan exists yet (ensures skipped tasks are excluded)
+2. For each task in `self.plan`:
+   - If `frequency == "daily"` → add to every day of the week
+   - If `frequency == "weekly"` → add only to `task.scheduled_day`
+3. Sort each day's task list by `scheduled_time`
+4. Return a `dict[str, list[Task]]` keyed by day name
 
 ## Explanation Logic (explain_plan)
 
