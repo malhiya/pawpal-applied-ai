@@ -78,7 +78,7 @@ The tests cover:
 
 ### Confidence level
 
-**★★★☆☆ 3/5** — Core scheduling behaviors (sorting, priority, conflict detection, recurrence) work correctly. However, two real bugs were found during testing: `complete_task` has no guard against being called twice, and `next_occurrence` silently drops the pet name. Additional silent failure modes exist for invalid frequency values and unknown scheduled days. Coverage gaps remain in multi-pet scenarios and the UI layer.
+**4/5** — Core scheduling behaviors (sorting, priority, conflict detection, recurrence) work correctly. However, two real bugs were found during testing: `complete_task` has no guard against being called twice, and `next_occurrence` silently drops the pet name. Additional silent failure modes exist for invalid frequency values and unknown scheduled days. Coverage gaps remain in multi-pet scenarios and the UI layer.
 
 ## Demo
 
