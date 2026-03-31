@@ -45,3 +45,26 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+Run the full test suite from the project root:
+
+```bash
+python -m pytest tests/test_pawpal.py -v
+```
+
+The tests cover:
+
+- **Task completion** — marking a task complete updates its `is_complete` status
+- **Pet task list** — adding a task increases the pet's task count
+- **Sorting** — `sort_by_time` returns tasks in ascending chronological order
+- **Recurrence** — completing a daily task creates a new task scheduled for the next day
+- **Conflict detection** — `Scheduler.detect_conflicts` flags two tasks sharing the same time slot on the same day
+- **Zero time budget** — `generate_plan` skips all tasks and populates `skipped_tasks` when `available_minutes` is 0
+- **Double completion** — calling `complete_task` twice on the same task appends two future copies
+- **`next_occurrence` pet name** — `next_occurrence()` resets `pet_name` to `""`, requiring the caller to re-assign it via `add_task`
+
+### Confidence level
+
+**★★★☆☆ 3/5** — Core scheduling behaviors (sorting, priority, conflict detection, recurrence) work correctly. However, two real bugs were found during testing: `complete_task` has no guard against being called twice, and `next_occurrence` silently drops the pet name. Additional silent failure modes exist for invalid frequency values and unknown scheduled days. Coverage gaps remain in multi-pet scenarios and the UI layer.
