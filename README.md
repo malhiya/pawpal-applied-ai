@@ -22,6 +22,17 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Features
+
+- **Priority-based scheduling** — tasks are sorted high → medium → low and greedily selected to fit within the owner's available time budget
+- **Plan explanation** — after generating a plan, the app explains why each task was included or skipped (priority + time fit)
+- **Daily recurrence** — completing a task automatically schedules its next occurrence one day later
+- **Weekly recurrence** — weekly tasks are pinned to a specific day and appear only on that day in the weekly view
+- **Weekly schedule view** — generates a full Mon–Sun schedule mapping each day to its sorted task list
+- **Sort by time** — any task list can be sorted by `scheduled_time` in ascending order
+- **Filter by pet** — narrow the schedule to a single pet or view all pets combined
+- **Conflict detection** — flags any two tasks under the same owner that share the same start time on the same day
+
 ## Smarter Scheduling
 
 Additonal features are added for a more natural and cleaner task scheduling. Weekly schedule output allows for recurring tasks to show. Filtering a schedule by a Pet allows a user to see the schedule of an individual pet. Tasks can also be sorted by time. And task conflictions are detected for any pet under the same owner for tasks with the same starting time. 
@@ -68,3 +79,15 @@ The tests cover:
 ### Confidence level
 
 **★★★☆☆ 3/5** — Core scheduling behaviors (sorting, priority, conflict detection, recurrence) work correctly. However, two real bugs were found during testing: `complete_task` has no guard against being called twice, and `next_occurrence` silently drops the pet name. Additional silent failure modes exist for invalid frequency values and unknown scheduled days. Coverage gaps remain in multi-pet scenarios and the UI layer.
+
+## Demo
+
+<a href="weekly_schedule.png" target="_blank"><img src='weekly_schedule.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="build_schedule.png" target="_blank"><img src='build_schedule.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="time_sort.png" target="_blank"><img src='time_sort.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="tasks.png" target="_blank"><img src='tasks.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="owners.png" target="_blank"><img src='owners.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
