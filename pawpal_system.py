@@ -12,21 +12,24 @@ class Task:
     scheduled_time: str = "08:00"  # 24-hour format, e.g. "08:00", "14:30"
     scheduled_day: str = "Monday"  # for weekly tasks: which day of the week
     is_complete: bool = False
-    pet_name: str = ""       # set automatically when added to a pet via Pet.add_task
-    scheduled_date: str = "" # ISO date string, e.g. "2026-03-29"; set on creation and next occurrences
+    pet_name: str = ""      # set automatically when added to a pet via Pet.add_task
+    start_date: str = ""    # ISO date string, e.g. "2026-04-25"; first day the task is active
+    end_date: str = ""      # ISO date string; last day the task is active (== start_date for single-day)
 
     def mark_complete(self) -> None:
         """Mark this task as complete."""
         self.is_complete = True
 
-    def next_occurrence(self) -> "Task":
-        """Return a new incomplete copy of this task scheduled for its next occurrence.
-        Daily tasks advance by 1 day; weekly tasks advance by 7 days."""
+    def next_occurrence(self) -> "Task | None":
+        """Return a new incomplete copy scheduled for the next occurrence within the date range.
+        Returns None if the next date would exceed end_date."""
         if self.frequency == "daily":
             next_date = date.today() + timedelta(days=1)
         else:  # weekly
             next_date = date.today() + timedelta(weeks=1)
-        return replace(self, is_complete=False, scheduled_date=next_date.isoformat(), pet_name="")
+        if self.end_date and next_date > date.fromisoformat(self.end_date):
+            return None
+        return replace(self, is_complete=False, start_date=next_date.isoformat(), pet_name="")
 
 
 class Pet:
@@ -41,11 +44,13 @@ class Pet:
         task.pet_name = self.name
         self.tasks.append(task)
 
-    def complete_task(self, task: Task) -> Task:
-        """Mark task complete and add a new instance scheduled for its next occurrence."""
+    def complete_task(self, task: Task) -> "Task | None":
+        """Mark task complete and add a new instance scheduled for its next occurrence.
+        Returns None if the task has no further occurrences within its date range."""
         task.mark_complete()
         next_task = task.next_occurrence()
-        self.add_task(next_task)  # sets pet_name automatically
+        if next_task is not None:
+            self.add_task(next_task)
         return next_task
 
     def remove_task(self, task: Task) -> None:
@@ -164,24 +169,35 @@ class Scheduler:
                         )
         return warnings
 
-    def generate_weekly_schedule(self, pet_name: str = "All Pets") -> dict[str, list[Task]]:
+    def generate_weekly_schedule(self, pet_name: str = "All Pets", week_start: date | None = None) -> dict[str, list[Task]]:
         """Return a dict mapping each day of the week to its list of tasks, sorted by scheduled_time.
-        Only includes tasks that fit within the time budget (skipped tasks are excluded).
-        Pass a pet_name to filter to a single pet, or 'All Pets' for the combined schedule."""
+        Only includes tasks whose date range is active on that specific calendar day.
+        Pass week_start (a Monday) to target a specific week; defaults to the current week."""
         if not self.plan:
             self.generate_plan()
 
+        today = date.today()
+        if week_start is None:
+            week_start = today - timedelta(days=today.weekday())
+
         days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         schedule: dict[str, list[Task]] = {day: [] for day in days}
-
         tasks_to_schedule = self.filter_by_pet(self.plan, pet_name)
 
         for task in tasks_to_schedule:
-            if task.frequency == "daily":
-                for day in days:
+            task_start = date.fromisoformat(task.start_date) if task.start_date else None
+            task_end = date.fromisoformat(task.end_date) if task.end_date else task_start
+
+            for i, day in enumerate(days):
+                day_date = week_start + timedelta(days=i)
+                if task_start and day_date < task_start:
+                    continue
+                if task_end and day_date > task_end:
+                    continue
+                if task.frequency == "daily":
                     schedule[day].append(task)
-            elif task.frequency == "weekly" and task.scheduled_day in schedule:
-                schedule[task.scheduled_day].append(task)
+                elif task.frequency == "weekly" and task.scheduled_day == day:
+                    schedule[day].append(task)
 
         for day in days:
             schedule[day].sort(key=lambda t: t.scheduled_time)

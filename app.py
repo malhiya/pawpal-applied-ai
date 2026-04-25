@@ -18,9 +18,21 @@ def show_edit_task_dialog():
     new_name = st.text_input("Task title", value=task_to_edit.name)
     new_duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=task_to_edit.duration_minutes)
     new_priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=["low", "medium", "high", "non-negotiable"].index(task_to_edit.priority))
-    new_frequency = st.selectbox("Frequency", ["daily", "weekly"], index=["daily", "weekly"].index(task_to_edit.frequency))
+    edit_single_day = st.checkbox("Single-day appointment", value=(task_to_edit.start_date == task_to_edit.end_date and bool(task_to_edit.start_date)))
+    new_frequency = st.selectbox("Frequency", ["daily", "weekly"], index=["daily", "weekly"].index(task_to_edit.frequency), disabled=edit_single_day)
     new_time = st.time_input("Time", value=_dt.time(*map(int, task_to_edit.scheduled_time.split(":"))))
-    new_day = st.selectbox("Day (weekly only)", days_of_week, index=days_of_week.index(task_to_edit.scheduled_day), disabled=(new_frequency == "daily"))
+    new_day = st.selectbox("Day (weekly only)", days_of_week, index=days_of_week.index(task_to_edit.scheduled_day), disabled=(edit_single_day or new_frequency == "daily"))
+    edit_col1, edit_col2 = st.columns(2)
+    with edit_col1:
+        default_start = _dt.date.fromisoformat(task_to_edit.start_date) if task_to_edit.start_date else _dt.date.today()
+        new_start_date = st.date_input("Start date", value=default_start, format="MM/DD/YYYY", key="edit_start_date")
+    with edit_col2:
+        if edit_single_day:
+            new_end_date = new_start_date
+            st.date_input("End date", value=new_start_date, format="MM/DD/YYYY", disabled=True, key="edit_end_date_disabled")
+        else:
+            default_end = _dt.date.fromisoformat(task_to_edit.end_date) if task_to_edit.end_date else default_start + _dt.timedelta(days=7)
+            new_end_date = st.date_input("End date", value=default_end, format="MM/DD/YYYY", key="edit_end_date")
 
     col_save, col_cancel = st.columns(2)
     save = col_save.button("Save", type="primary", use_container_width=True)
@@ -37,11 +49,22 @@ def show_edit_task_dialog():
             frequency=new_frequency,
             scheduled_time=new_time.strftime("%H:%M"),
             scheduled_day=new_day,
+            start_date=new_start_date.isoformat(),
+            end_date=new_end_date.isoformat(),
         )
 
         def _window(t):
             s = _dt2.datetime.strptime(t.scheduled_time, "%H:%M")
             return s, s + _dt2.timedelta(minutes=t.duration_minutes)
+
+        def _dates_overlap(t1, t2):
+            if not t1.start_date or not t2.start_date:
+                return True
+            s1 = _dt2.date.fromisoformat(t1.start_date)
+            e1 = _dt2.date.fromisoformat(t1.end_date) if t1.end_date else s1
+            s2 = _dt2.date.fromisoformat(t2.start_date)
+            e2 = _dt2.date.fromisoformat(t2.end_date) if t2.end_date else s2
+            return s1 <= e2 and s2 <= e1
 
         owner = st.session_state.get("editing_owner")
         all_tasks = [t for p in owner.pets for t in p.tasks] if owner else pet.tasks
@@ -49,6 +72,8 @@ def show_edit_task_dialog():
         u_start, u_end = _window(updated)
         for existing in all_tasks:
             if existing is task_to_edit or existing.is_complete:
+                continue
+            if not _dates_overlap(updated, existing):
                 continue
             same_day = (
                 existing.frequency == "daily"
@@ -91,6 +116,7 @@ def show_task_details():
 
     st.markdown(f"### {p.get('name', '—')}")
     st.write(f"**Pet:** {p.get('petName', '—')}")
+    st.write(f"**Date:** {p.get('date', '—')}")
     st.write(f"**Time:** {p.get('start', '—')} – {p.get('end', '—')} ({p.get('duration', '—')} min)")
     st.write(f"**Priority:** {p.get('priority', '—')}")
     st.write(f"**Status:** {'✅ Done' if is_done else 'Pending'}")
@@ -105,6 +131,24 @@ def show_task_details():
             st.rerun()
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    .react-datepicker__day--today {
+        border-radius: 50% !important;
+        border: 2px solid #ff4b4b !important;
+        font-weight: bold !important;
+        color: #ff4b4b !important;
+    }
+    .react-datepicker__day--today.react-datepicker__day--selected {
+        color: #ffffff !important;
+        background-color: #ff4b4b !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.title("🐾 PawPal+")
 
@@ -195,15 +239,25 @@ else:
         with col3:
             priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=2)
 
+        single_day = st.checkbox("Single-day appointment")
         col4, col5, col6 = st.columns(3)
         with col4:
-            frequency = st.selectbox("Frequency", ["daily", "weekly"])
+            frequency = st.selectbox("Frequency", ["daily", "weekly"], disabled=single_day)
         with col5:
             import datetime
             scheduled_time = st.time_input("Time", value=datetime.time(8, 0))
         with col6:
             days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            scheduled_day = st.selectbox("Day (weekly only)", days_of_week, disabled=(frequency == "daily"))
+            scheduled_day = st.selectbox("Day (weekly only)", days_of_week, disabled=(single_day or frequency == "daily"))
+        col_date1, col_date2 = st.columns(2)
+        with col_date1:
+            task_start_date = st.date_input("Start date", value=datetime.date.today(), format="MM/DD/YYYY")
+        with col_date2:
+            if single_day:
+                task_end_date = task_start_date
+                st.date_input("End date", value=task_start_date, format="MM/DD/YYYY", disabled=True)
+            else:
+                task_end_date = st.date_input("End date", value=datetime.date.today() + datetime.timedelta(days=7), format="MM/DD/YYYY")
 
         if st.button("Add task"):
             new_task = Task(
@@ -214,17 +268,30 @@ else:
                 frequency=frequency,
                 scheduled_time=scheduled_time.strftime("%H:%M"),
                 scheduled_day=scheduled_day,
+                start_date=task_start_date.isoformat(),
+                end_date=task_end_date.isoformat(),
             )
             def task_window(task):
                 start = datetime.datetime.strptime(task.scheduled_time, "%H:%M")
                 end = start + datetime.timedelta(minutes=task.duration_minutes)
                 return start, end
 
+            def date_ranges_overlap(t1, t2):
+                if not t1.start_date or not t2.start_date:
+                    return True
+                s1 = datetime.date.fromisoformat(t1.start_date)
+                e1 = datetime.date.fromisoformat(t1.end_date) if t1.end_date else s1
+                s2 = datetime.date.fromisoformat(t2.start_date)
+                e2 = datetime.date.fromisoformat(t2.end_date) if t2.end_date else s2
+                return s1 <= e2 and s2 <= e1
+
             all_existing = [t for pet in selected_owner.pets for t in pet.tasks]
             conflict = None
             new_start, new_end = task_window(new_task)
             for existing in all_existing:
                 if existing.is_complete:
+                    continue
+                if not date_ranges_overlap(new_task, existing):
                     continue
                 same_day = (
                     existing.frequency == "daily"
@@ -256,13 +323,26 @@ else:
             for i, task in enumerate(selected_pet.tasks):
                 col_check, col_status, col_edit, col_delete = st.columns([3, 1, 1, 1])
                 with col_check:
-                    checked = st.checkbox(
-                        f"{task.name} ({task.priority}, {task.duration_minutes} min)",
-                        value=task.is_complete,
-                        key=f"task_{selected_owner_name}_{selected_pet_name}_{i}"
-                    )
-                    if checked and not task.is_complete:
-                        selected_pet.complete_task(task)
+                    import datetime as _dt_fmt
+                    try:
+                        time_str = _dt_fmt.datetime.strptime(task.scheduled_time, "%H:%M").strftime("%I:%M %p").lstrip("0")
+                    except Exception:
+                        time_str = task.scheduled_time
+                    if task.start_date and task.end_date and task.start_date != task.end_date:
+                        try:
+                            s = _dt_fmt.date.fromisoformat(task.start_date).strftime("%-m/%-d/%Y")
+                            e = _dt_fmt.date.fromisoformat(task.end_date).strftime("%-m/%-d/%Y")
+                            date_str = f"{s} – {e}"
+                        except Exception:
+                            date_str = f"{task.start_date} – {task.end_date}"
+                    elif task.start_date:
+                        try:
+                            date_str = _dt_fmt.date.fromisoformat(task.start_date).strftime("%-m/%-d/%Y")
+                        except Exception:
+                            date_str = task.start_date
+                    else:
+                        date_str = "No date"
+                    st.write(f"**{task.name}** — {task.priority} priority · {date_str} · {time_str} · {task.duration_minutes} min")
                 with col_status:
                     if task.is_complete:
                         st.success("✅ Done")
@@ -333,14 +413,8 @@ else:
             st.session_state["last_weekly_scheduler"] = scheduler
 
         if "last_weekly_scheduler" in st.session_state:
-            weekly = st.session_state["last_weekly_scheduler"].generate_weekly_schedule(pet_name=selected_pet_filter)
-
-            days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             today = datetime.date.today()
-            day_to_date = {
-                day: (today + datetime.timedelta(days=(i - today.weekday()) % 7)).isoformat()
-                for i, day in enumerate(days)
-            }
+            weekly = st.session_state["last_weekly_scheduler"].generate_weekly_schedule(pet_name=selected_pet_filter)
 
             priority_colors = {
                 "non-negotiable": {"bg": "#ffaaaa", "border": "#cc3333"},
@@ -349,34 +423,50 @@ else:
                 "low":            {"bg": "#aaddaa", "border": "#337733"},
             }
 
+            # Collect tasks for the selected pet filter, then expand each by its date range
+            all_cal_tasks = [t for p in selected_owner.pets for t in p.tasks if not t.is_complete]
+            if selected_pet_filter != "All Pets":
+                all_cal_tasks = [t for t in all_cal_tasks if t.pet_name == selected_pet_filter]
+
             events = []
-            for day, tasks in weekly.items():
-                for t in tasks:
-                    done_key = f"done_{t.name}_{t.pet_name}_{day}_{t.scheduled_time}"
+            for t in all_cal_tasks:
+                if not t.start_date:
+                    continue
+                t_start = datetime.date.fromisoformat(t.start_date)
+                t_end = datetime.date.fromisoformat(t.end_date) if t.end_date else t_start
+                end_time_obj = (
+                    datetime.datetime.strptime(t.scheduled_time, "%H:%M")
+                    + datetime.timedelta(minutes=t.duration_minutes)
+                )
+                end_str = end_time_obj.strftime('%H:%M')
+                colors = priority_colors.get(t.priority, {"bg": "#cccccc", "border": "#888888"})
+
+                current = t_start
+                while current <= t_end:
+                    if t.frequency == "weekly" and current.strftime("%A") != t.scheduled_day:
+                        current += datetime.timedelta(days=1)
+                        continue
+                    done_key = f"done_{t.name}_{t.pet_name}_{current.isoformat()}_{t.scheduled_time}"
                     is_done = st.session_state.get(done_key, False)
-                    colors = priority_colors.get(t.priority, {"bg": "#cccccc", "border": "#888888"})
-                    end_time_obj = (
-                        datetime.datetime.strptime(t.scheduled_time, "%H:%M")
-                        + datetime.timedelta(minutes=t.duration_minutes)
-                    )
-                    end_str = end_time_obj.strftime('%H:%M')
                     events.append({
                         "id": done_key,
                         "title": f"✅ {t.name} [{t.pet_name}]" if is_done else f"{t.name} [{t.pet_name}]",
-                        "start": f"{day_to_date[day]}T{t.scheduled_time}:00",
-                        "end":   f"{day_to_date[day]}T{end_str}:00",
+                        "start": f"{current.isoformat()}T{t.scheduled_time}:00",
+                        "end":   f"{current.isoformat()}T{end_str}:00",
                         "backgroundColor": "#d0d0d0" if is_done else colors["bg"],
                         "borderColor":     "#999999" if is_done else colors["border"],
                         "textColor":       "#888888" if is_done else "#333333",
                         "extendedProps": {
                             "name":     t.name,
                             "petName":  t.pet_name,
+                            "date":     current.isoformat(),
                             "start":    t.scheduled_time,
                             "end":      end_str,
                             "duration": t.duration_minutes,
                             "priority": t.priority,
                         },
                     })
+                    current += datetime.timedelta(days=1)
 
             plan_start_24 = _display_to_24[start_display]
             plan_end_24   = _display_to_24[end_display]
@@ -393,7 +483,7 @@ else:
                 "headerToolbar": {
                     "left":   "prev,next today",
                     "center": "title",
-                    "right":  "timeGridWeek,timeGridDay",
+                    "right":  "dayGridMonth,timeGridWeek,timeGridDay",
                 },
                 "height": 900,
                 "slotMinHeight": 50,
