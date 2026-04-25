@@ -377,9 +377,5 @@ else:
                 result = st_calendar(events=events, options=cal_options, key="weekly_cal")
                 if result and result.get("eventClick"):
                     st.session_state["clicked_task"] = result["eventClick"]["event"]
-                    st.session_state["open_task_dialog"] = True
-                    st.rerun()
-
-                if st.session_state.pop("open_task_dialog", False):
                     show_task_details()
 
