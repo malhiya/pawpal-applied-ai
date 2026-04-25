@@ -3,6 +3,50 @@ from pawpal_system import Task, Pet, Owner, Scheduler
 from streamlit_calendar import calendar as st_calendar
 
 
+@st.dialog("Edit Task")
+def show_edit_task_dialog():
+    import datetime as _dt
+    pet = st.session_state.get("editing_pet")
+    edit_i = st.session_state.get("editing_task_index")
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    if pet is None or edit_i is None or edit_i >= len(pet.tasks):
+        st.warning("No task selected.")
+        return
+
+    task_to_edit = pet.tasks[edit_i]
+    new_name = st.text_input("Task title", value=task_to_edit.name)
+    new_duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=task_to_edit.duration_minutes)
+    new_priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=["low", "medium", "high", "non-negotiable"].index(task_to_edit.priority))
+    new_frequency = st.selectbox("Frequency", ["daily", "weekly"], index=["daily", "weekly"].index(task_to_edit.frequency))
+    new_time = st.time_input("Time", value=_dt.time(*map(int, task_to_edit.scheduled_time.split(":"))))
+    new_day = st.selectbox("Day (weekly only)", days_of_week, index=days_of_week.index(task_to_edit.scheduled_day), disabled=(new_frequency == "daily"))
+
+    col_save, col_cancel = st.columns(2)
+    save = col_save.button("Save", type="primary", use_container_width=True)
+    cancel = col_cancel.button("Cancel", use_container_width=True)
+
+    if save:
+        from dataclasses import replace as dc_replace
+        updated = dc_replace(
+            task_to_edit,
+            name=new_name,
+            duration_minutes=int(new_duration),
+            priority=new_priority,
+            frequency=new_frequency,
+            scheduled_time=new_time.strftime("%H:%M"),
+            scheduled_day=new_day,
+        )
+        pet.edit_task(task_to_edit, updated)
+        st.session_state.editing_task_index = None
+        st.session_state.editing_pet = None
+        st.rerun()
+    if cancel:
+        st.session_state.editing_task_index = None
+        st.session_state.editing_pet = None
+        st.rerun()
+
+
 @st.dialog("Task Details")
 def show_task_details():
     ev = st.session_state.get("clicked_task", {})
@@ -190,6 +234,8 @@ else:
                 with col_edit:
                     if st.button("Edit", key=f"edit_{selected_owner_name}_{selected_pet_name}_{i}"):
                         st.session_state.editing_task_index = i
+                        st.session_state.editing_pet = selected_pet
+                        show_edit_task_dialog()
                 with col_delete:
                     if st.button("Delete", key=f"delete_{selected_owner_name}_{selected_pet_name}_{i}"):
                         selected_pet.remove_task(task)
@@ -197,38 +243,6 @@ else:
                             st.session_state.editing_task_index = None
                         st.rerun()
 
-            edit_i = st.session_state.editing_task_index
-            if edit_i is not None and edit_i < len(selected_pet.tasks):
-                task_to_edit = selected_pet.tasks[edit_i]
-                st.markdown("**Edit task:**")
-                with st.form(key="edit_task_form"):
-                    new_name = st.text_input("Task title", value=task_to_edit.name)
-                    new_duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=task_to_edit.duration_minutes)
-                    new_priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=["low", "medium", "high", "non-negotiable"].index(task_to_edit.priority))
-                    new_frequency = st.selectbox("Frequency", ["daily", "weekly"], index=["daily", "weekly"].index(task_to_edit.frequency))
-                    new_time = st.time_input("Time", value=datetime.time(*map(int, task_to_edit.scheduled_time.split(":"))))
-                    new_day = st.selectbox("Day (weekly only)", days_of_week, index=days_of_week.index(task_to_edit.scheduled_day), disabled=(new_frequency == "daily"))
-                    col_save, col_cancel = st.columns(2)
-                    save = col_save.form_submit_button("Save")
-                    cancel = col_cancel.form_submit_button("Cancel")
-
-                if save:
-                    from dataclasses import replace as dc_replace
-                    updated = dc_replace(
-                        task_to_edit,
-                        name=new_name,
-                        duration_minutes=int(new_duration),
-                        priority=new_priority,
-                        frequency=new_frequency,
-                        scheduled_time=new_time.strftime("%H:%M"),
-                        scheduled_day=new_day,
-                    )
-                    selected_pet.edit_task(task_to_edit, updated)
-                    st.session_state.editing_task_index = None
-                    st.rerun()
-                if cancel:
-                    st.session_state.editing_task_index = None
-                    st.rerun()
         else:
             st.info("No tasks yet. Add one above.")
 
