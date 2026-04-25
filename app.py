@@ -28,6 +28,7 @@ def show_edit_task_dialog():
 
     if save:
         from dataclasses import replace as dc_replace
+        import datetime as _dt2
         updated = dc_replace(
             task_to_edit,
             name=new_name,
@@ -37,13 +38,47 @@ def show_edit_task_dialog():
             scheduled_time=new_time.strftime("%H:%M"),
             scheduled_day=new_day,
         )
-        pet.edit_task(task_to_edit, updated)
-        st.session_state.editing_task_index = None
-        st.session_state.editing_pet = None
-        st.rerun()
+
+        def _window(t):
+            s = _dt2.datetime.strptime(t.scheduled_time, "%H:%M")
+            return s, s + _dt2.timedelta(minutes=t.duration_minutes)
+
+        owner = st.session_state.get("editing_owner")
+        all_tasks = [t for p in owner.pets for t in p.tasks] if owner else pet.tasks
+        conflict = None
+        u_start, u_end = _window(updated)
+        for existing in all_tasks:
+            if existing is task_to_edit or existing.is_complete:
+                continue
+            same_day = (
+                existing.frequency == "daily"
+                or updated.frequency == "daily"
+                or existing.scheduled_day == updated.scheduled_day
+            )
+            if not same_day:
+                continue
+            ex_start, ex_end = _window(existing)
+            if u_start < ex_end and ex_start < u_end:
+                conflict = existing
+                break
+
+        if conflict:
+            ex_start, ex_end = _window(conflict)
+            st.warning(
+                f"Time conflict with '{conflict.name}' ({conflict.pet_name}) "
+                f"which runs {ex_start.strftime('%H:%M')}–{ex_end.strftime('%H:%M')}. "
+                f"Please choose a different time or adjust the duration."
+            )
+        else:
+            pet.edit_task(task_to_edit, updated)
+            st.session_state.editing_task_index = None
+            st.session_state.editing_pet = None
+            st.session_state.editing_owner = None
+            st.rerun()
     if cancel:
         st.session_state.editing_task_index = None
         st.session_state.editing_pet = None
+        st.session_state.editing_owner = None
         st.rerun()
 
 
@@ -235,6 +270,7 @@ else:
                     if st.button("Edit", key=f"edit_{selected_owner_name}_{selected_pet_name}_{i}"):
                         st.session_state.editing_task_index = i
                         st.session_state.editing_pet = selected_pet
+                        st.session_state.editing_owner = selected_owner
                         show_edit_task_dialog()
                 with col_delete:
                     if st.button("Delete", key=f"delete_{selected_owner_name}_{selected_pet_name}_{i}"):
@@ -377,6 +413,29 @@ else:
                 st.info("No tasks scheduled yet.")
             else:
                 st.caption("Click an event to view details.")
+                st.markdown(
+                    """
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:8px; align-items:center;">
+                        <span style="font-weight:600; font-size:0.85rem;">Priority:</span>
+                        <span style="display:flex; align-items:center; gap:5px; font-size:0.82rem;">
+                            <span style="width:14px; height:14px; border-radius:3px; background:#ffaaaa; border:2px solid #cc3333; display:inline-block;"></span> Non-negotiable
+                        </span>
+                        <span style="display:flex; align-items:center; gap:5px; font-size:0.82rem;">
+                            <span style="width:14px; height:14px; border-radius:3px; background:#ffcc88; border:2px solid #cc6600; display:inline-block;"></span> High
+                        </span>
+                        <span style="display:flex; align-items:center; gap:5px; font-size:0.82rem;">
+                            <span style="width:14px; height:14px; border-radius:3px; background:#fff099; border:2px solid #ccaa00; display:inline-block;"></span> Medium
+                        </span>
+                        <span style="display:flex; align-items:center; gap:5px; font-size:0.82rem;">
+                            <span style="width:14px; height:14px; border-radius:3px; background:#aaddaa; border:2px solid #337733; display:inline-block;"></span> Low
+                        </span>
+                        <span style="display:flex; align-items:center; gap:5px; font-size:0.82rem;">
+                            <span style="width:14px; height:14px; border-radius:3px; background:#d0d0d0; border:2px solid #999999; display:inline-block;"></span> Completed
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 st.markdown(
                     """
                     <style>
