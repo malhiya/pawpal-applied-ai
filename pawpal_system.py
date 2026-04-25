@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 @dataclass
 class Task:
     name: str
     duration_minutes: int
-    priority: str       # "high", "medium", or "low"
+    priority: str       # "non-negotiable", "high", "medium", or "low"
     category: str       # e.g. "walk", "feeding", "meds", "grooming"
     frequency: str      # e.g. "daily", "weekly"
     scheduled_time: str = "08:00"  # 24-hour format, e.g. "08:00", "14:30"
@@ -63,10 +63,8 @@ class Pet:
 
 
 class Owner:
-    def __init__(self, name: str, available_minutes: int):
+    def __init__(self, name: str):
         self.name = name
-        # used by Scheduler as the time budget — never mutate directly inside generate_plan
-        self.available_minutes = available_minutes
         self.pets: list[Pet] = []
 
     def add_pet(self, pet: Pet) -> None:
@@ -106,19 +104,12 @@ class Scheduler:
             if not task.is_complete:
                 incomplete_tasks.append(task)
 
-        # sort by priority: high first, then medium, then low
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        sorted_tasks = sorted(incomplete_tasks, key=lambda t: priority_order.get(t.priority, 3))
+        # sort by priority: non-negotiable first, then high, medium, low
+        priority_order = {"non-negotiable": 0, "high": 1, "medium": 2, "low": 3}
+        sorted_tasks = sorted(incomplete_tasks, key=lambda t: priority_order.get(t.priority, 4))
         # efficient one-liner: same as above, sorted() is already concise
 
-        # greedily add tasks that fit within the time budget
-        remaining = self.owner.available_minutes
-        for task in sorted_tasks:
-            if task.duration_minutes <= remaining:
-                self.plan.append(task)
-                remaining -= task.duration_minutes
-            else:
-                self.skipped_tasks.append(task)
+        self.plan = sorted_tasks
 
         return self.plan
 
@@ -140,7 +131,7 @@ class Scheduler:
                 index = all_tasks.index(task)
                 explanation += f"  {index}. {task.name} ({task.priority} priority, {task.duration_minutes} min) — not enough time remaining\n\n"
 
-        explanation += "\nTasks are organized by priority (high → medium → low), ensuring the most important care gets done first within the available time budget.\n"
+        explanation += "\nTasks are organized by priority (non-negotiable → high → medium → low), ensuring the most important care gets done first within the available time budget.\n"
 
         return explanation
 
@@ -155,19 +146,22 @@ class Scheduler:
         return [task for task in tasks if task.pet_name == pet_name]
 
     def detect_conflicts(self, weekly: dict[str, list[Task]]) -> list[str]:
-        """Return warning messages for any two tasks starting at the same time on the same day."""
+        """Return warning messages for any two tasks whose time ranges overlap on the same day."""
         warnings = []
         for day, tasks in weekly.items():
-            seen = {}  # scheduled_time -> first task at that slot
-            for task in tasks:
-                if task.scheduled_time in seen:
-                    other = seen[task.scheduled_time]
-                    warnings.append(
-                        f"{day} at {task.scheduled_time}: '{task.name}' [{task.pet_name}] "
-                        f"conflicts with '{other.name}' [{other.pet_name}]"
-                    )
-                else:
-                    seen[task.scheduled_time] = task
+            for i, a in enumerate(tasks):
+                start_a = datetime.strptime(a.scheduled_time, "%H:%M")
+                end_a = start_a + timedelta(minutes=a.duration_minutes)
+                for b in tasks[i + 1:]:
+                    start_b = datetime.strptime(b.scheduled_time, "%H:%M")
+                    end_b = start_b + timedelta(minutes=b.duration_minutes)
+                    if start_a < end_b and start_b < end_a:
+                        warnings.append(
+                            f"{day}: '{a.name}' [{a.pet_name}] "
+                            f"({a.scheduled_time}–{end_a.strftime('%H:%M')}) overlaps with "
+                            f"'{b.name}' [{b.pet_name}] "
+                            f"({b.scheduled_time}–{end_b.strftime('%H:%M')})"
+                        )
         return warnings
 
     def generate_weekly_schedule(self, pet_name: str = "All Pets") -> dict[str, list[Task]]:

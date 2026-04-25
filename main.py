@@ -1,7 +1,7 @@
 from pawpal_system import Task, Pet, Owner, Scheduler
 
 # Create owner
-owner = Owner(name="Alex", available_minutes=50)
+owner = Owner(name="Alex")
 
 # Create pets
 buddy = Pet(name="Buddy", species="Dog", age=3)
@@ -34,8 +34,7 @@ for pet in owner.pets:
 print("=" * 40)
 print("        TODAY'S SCHEDULE")
 print("=" * 40)
-print(f"Owner : {owner.name}")
-print(f"Budget: {owner.available_minutes} minutes\n")
+print(f"Owner : {owner.name}\n")
 
 for pet in owner.pets:
     print(f"[{pet.name} the {pet.species}]")

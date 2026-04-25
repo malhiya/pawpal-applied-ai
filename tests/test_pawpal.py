@@ -21,7 +21,7 @@ def test_add_task_increases_pet_task_count():
     assert len(pet.tasks) == 1
 
 def test_sort_by_time_returns_chronological_order():
-    owner = Owner(name="Alex", available_minutes=120)
+    owner = Owner(name="Alex")
     scheduler = Scheduler(owner)
 
     tasks = [
@@ -54,7 +54,7 @@ def test_complete_daily_task_creates_next_day_occurrence():
 
 
 def test_detect_conflicts_flags_duplicate_times():
-    owner = Owner(name="Alex", available_minutes=120)
+    owner = Owner(name="Alex")
     scheduler = Scheduler(owner)
 
     task1 = Task(name="Walk", duration_minutes=30, priority="high", category="walk", frequency="daily", scheduled_time="08:00", pet_name="Buddy")
@@ -71,19 +71,19 @@ def test_detect_conflicts_flags_duplicate_times():
 
 
 ##Extra Tests##
-def test_generate_plan_zero_available_minutes():
-    """Scheduler should skip all tasks and return an empty plan when the owner
-    has zero available minutes, placing every task in skipped_tasks instead."""
-    owner = Owner(name="Alex", available_minutes=0)
+def test_generate_plan_includes_all_incomplete_tasks():
+    """Scheduler should include all incomplete tasks in the plan."""
+    owner = Owner(name="Alex")
     pet = Pet(name="Buddy", species="dog", age=3)
     pet.add_task(Task(name="Walk", duration_minutes=30, priority="high", category="walk", frequency="daily"))
+    pet.add_task(Task(name="Feed", duration_minutes=10, priority="medium", category="feeding", frequency="daily"))
     owner.add_pet(pet)
     scheduler = Scheduler(owner)
 
     plan = scheduler.generate_plan()
 
-    assert plan == []
-    assert len(scheduler.skipped_tasks) == 1
+    assert len(plan) == 2
+    assert scheduler.skipped_tasks == []
 
 
 def test_complete_task_twice_adds_two_future_copies():

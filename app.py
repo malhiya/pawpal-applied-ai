@@ -1,7 +1,31 @@
 import streamlit as st
 from pawpal_system import Task, Pet, Owner, Scheduler
+from streamlit_calendar import calendar as st_calendar
 
-st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
+
+@st.dialog("Task Details")
+def show_task_details():
+    ev = st.session_state.get("clicked_task", {})
+    p  = ev.get("extendedProps", {})
+    event_id = ev.get("id", "")
+    is_done  = st.session_state.get(event_id, False)
+
+    st.markdown(f"### {p.get('name', '—')}")
+    st.write(f"**Pet:** {p.get('petName', '—')}")
+    st.write(f"**Time:** {p.get('start', '—')} – {p.get('end', '—')} ({p.get('duration', '—')} min)")
+    st.write(f"**Priority:** {p.get('priority', '—')}")
+    st.write(f"**Status:** {'✅ Done' if is_done else 'Pending'}")
+
+    if is_done:
+        if st.button("Mark Incomplete", use_container_width=True):
+            st.session_state[event_id] = False
+            st.rerun()
+    else:
+        if st.button("Mark Complete", type="primary", use_container_width=True):
+            st.session_state[event_id] = True
+            st.rerun()
+
+st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
 
 st.title("🐾 PawPal+")
 
@@ -41,7 +65,6 @@ st.divider()
 
 st.subheader("Quick Demo Inputs (UI only)")
 owner_name = st.text_input("Owner name", value="Jordan")
-available_minutes = st.number_input("Available minutes today", min_value=1, max_value=480, value=60)
 pet_name = st.text_input("Pet name", value="Mochi")
 species = st.selectbox("Species", ["dog", "cat", "other"])
 
@@ -52,11 +75,10 @@ if st.button("Create Owner & Pet"):
     pet = Pet(pet_name, species, age=1)
     existing = next((o for o in st.session_state.owners if o.name == owner_name), None)
     if existing:
-        existing.available_minutes = int(available_minutes)
         if not any(p.name == pet_name for p in existing.pets):
             existing.add_pet(pet)
     else:
-        new_owner = Owner(owner_name, available_minutes=int(available_minutes))
+        new_owner = Owner(owner_name)
         new_owner.add_pet(pet)
         st.session_state.owners.append(new_owner)
 
@@ -64,7 +86,7 @@ if st.session_state.owners:
     st.write("**Saved owners:**")
     for o in st.session_state.owners:
         pet_names = ", ".join(p.name for p in o.pets)
-        st.write(f"- {o.name} ({o.available_minutes} min) — pets: {pet_names}")
+        st.write(f"- {o.name} — pets: {pet_names}")
 else:
     st.info("No owners yet.")
 
@@ -92,7 +114,7 @@ else:
         with col2:
             duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
         with col3:
-            priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
+            priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=2)
 
         col4, col5, col6 = st.columns(3)
         with col4:
@@ -114,21 +136,38 @@ else:
                 scheduled_time=scheduled_time.strftime("%H:%M"),
                 scheduled_day=scheduled_day,
             )
-            # warn if any existing task across all pets starts at the same time on the same day
+            def task_window(task):
+                start = datetime.datetime.strptime(task.scheduled_time, "%H:%M")
+                end = start + datetime.timedelta(minutes=task.duration_minutes)
+                return start, end
+
             all_existing = [t for pet in selected_owner.pets for t in pet.tasks]
+            conflict = None
+            new_start, new_end = task_window(new_task)
             for existing in all_existing:
-                if existing.scheduled_time == new_task.scheduled_time and not existing.is_complete:
-                    same_day = (
-                        existing.frequency == "daily"
-                        or new_task.frequency == "daily"
-                        or existing.scheduled_day == new_task.scheduled_day
-                    )
-                    if same_day:
-                        st.warning(
-                            f"'{new_task.name}' starts at {new_task.scheduled_time}, "
-                            f"same as existing task '{existing.name}'. Task was still added."
-                        )
-            selected_pet.add_task(new_task)
+                if existing.is_complete:
+                    continue
+                same_day = (
+                    existing.frequency == "daily"
+                    or new_task.frequency == "daily"
+                    or existing.scheduled_day == new_task.scheduled_day
+                )
+                if not same_day:
+                    continue
+                ex_start, ex_end = task_window(existing)
+                if new_start < ex_end and ex_start < new_end:
+                    conflict = existing
+                    break
+            if conflict:
+                ex_start, ex_end = task_window(conflict)
+                st.error(
+                    f"Task '{new_task.name}' was not added due to a scheduling conflict: "
+                    f"'{conflict.name}' [{conflict.pet_name}] runs from "
+                    f"{ex_start.strftime('%H:%M')} to {ex_end.strftime('%H:%M')}. "
+                    f"Please choose a different time or adjust the duration."
+                )
+            else:
+                selected_pet.add_task(new_task)
 
         if "editing_task_index" not in st.session_state:
             st.session_state.editing_task_index = None
@@ -165,7 +204,7 @@ else:
                 with st.form(key="edit_task_form"):
                     new_name = st.text_input("Task title", value=task_to_edit.name)
                     new_duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=task_to_edit.duration_minutes)
-                    new_priority = st.selectbox("Priority", ["low", "medium", "high"], index=["low", "medium", "high"].index(task_to_edit.priority))
+                    new_priority = st.selectbox("Priority", ["low", "medium", "high", "non-negotiable"], index=["low", "medium", "high", "non-negotiable"].index(task_to_edit.priority))
                     new_frequency = st.selectbox("Frequency", ["daily", "weekly"], index=["daily", "weekly"].index(task_to_edit.frequency))
                     new_time = st.time_input("Time", value=datetime.time(*map(int, task_to_edit.scheduled_time.split(":"))))
                     new_day = st.selectbox("Day (weekly only)", days_of_week, index=days_of_week.index(task_to_edit.scheduled_day), disabled=(new_frequency == "daily"))
@@ -214,10 +253,30 @@ else:
                     st.write(f"`{task.scheduled_time}` — {task.name} [{task.pet_name}] ({task.priority}, {task.duration_minutes} min)")
 
         st.divider()
-        st.subheader("Weekly Schedule")
+        st.subheader("Weekly Planner")
 
         pet_filter_options = ["All Pets"] + [p.name for p in selected_owner.pets]
-        selected_pet_filter = st.selectbox("Sort by pet", pet_filter_options, key="weekly_pet_filter")
+        selected_pet_filter = st.selectbox("Filter by pet", pet_filter_options, key="weekly_pet_filter")
+
+        _time_options = [
+            datetime.time(h, m).strftime("%I:%M %p").lstrip("0")
+            for h in range(24) for m in (0, 30)
+        ]
+        _time_24 = [
+            datetime.time(h, m).strftime("%H:%M")
+            for h in range(24) for m in (0, 30)
+        ]
+        _display_to_24 = dict(zip(_time_options, _time_24))
+
+        plan_col1, plan_col2, plan_col3 = st.columns(3)
+        with plan_col1:
+            start_display = st.selectbox("Start time", _time_options, index=12, key="plan_start")
+        with plan_col2:
+            end_display = st.selectbox("End time", _time_options, index=44, key="plan_end")
+        with plan_col3:
+            interval_label = st.selectbox("Interval", ["15 min", "30 min", "1 hour", "2 hours"], index=2, key="plan_interval")
+        interval_map = {"15 min": 15, "30 min": 30, "1 hour": 60, "2 hours": 120}
+        interval_minutes = interval_map[interval_label]
 
         if st.button("Generate weekly schedule"):
             scheduler = Scheduler(selected_owner)
@@ -226,35 +285,101 @@ else:
         if "last_weekly_scheduler" in st.session_state:
             weekly = st.session_state["last_weekly_scheduler"].generate_weekly_schedule(pet_name=selected_pet_filter)
 
-
             days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            today = datetime.date.today()
+            day_to_date = {
+                day: (today + datetime.timedelta(days=(i - today.weekday()) % 7)).isoformat()
+                for i, day in enumerate(days)
+            }
 
-            # collect all unique times across the week, sorted
-            all_times = sorted({task.scheduled_time for day_tasks in weekly.values() for task in day_tasks})
+            priority_colors = {
+                "non-negotiable": {"bg": "#ffaaaa", "border": "#cc3333"},
+                "high":           {"bg": "#ffcc88", "border": "#cc6600"},
+                "medium":         {"bg": "#fff099", "border": "#ccaa00"},
+                "low":            {"bg": "#aaddaa", "border": "#337733"},
+            }
 
-            if not all_times:
+            events = []
+            for day, tasks in weekly.items():
+                for t in tasks:
+                    done_key = f"done_{t.name}_{t.pet_name}_{day}_{t.scheduled_time}"
+                    is_done = st.session_state.get(done_key, False)
+                    colors = priority_colors.get(t.priority, {"bg": "#cccccc", "border": "#888888"})
+                    end_time_obj = (
+                        datetime.datetime.strptime(t.scheduled_time, "%H:%M")
+                        + datetime.timedelta(minutes=t.duration_minutes)
+                    )
+                    end_str = end_time_obj.strftime('%H:%M')
+                    events.append({
+                        "id": done_key,
+                        "title": f"✅ {t.name} [{t.pet_name}]" if is_done else f"{t.name} [{t.pet_name}]",
+                        "start": f"{day_to_date[day]}T{t.scheduled_time}:00",
+                        "end":   f"{day_to_date[day]}T{end_str}:00",
+                        "backgroundColor": "#d0d0d0" if is_done else colors["bg"],
+                        "borderColor":     "#999999" if is_done else colors["border"],
+                        "textColor":       "#888888" if is_done else "#333333",
+                        "extendedProps": {
+                            "name":     t.name,
+                            "petName":  t.pet_name,
+                            "start":    t.scheduled_time,
+                            "end":      end_str,
+                            "duration": t.duration_minutes,
+                            "priority": t.priority,
+                        },
+                    })
+
+            plan_start_24 = _display_to_24[start_display]
+            plan_end_24   = _display_to_24[end_display]
+            slot_duration = f"{interval_minutes // 60:02d}:{interval_minutes % 60:02d}:00"
+
+            cal_options = {
+                "initialView": "timeGridWeek",
+                "initialDate": today.isoformat(),
+                "firstDay": (today.weekday() + 1) % 7,
+                "slotMinTime": f"{plan_start_24}:00",
+                "slotMaxTime": f"{plan_end_24}:00",
+                "slotDuration": slot_duration,
+                # "slotEventOverlap": False, 
+                "headerToolbar": {
+                    "left":   "prev,next today",
+                    "center": "title",
+                    "right":  "timeGridWeek,timeGridDay",
+                },
+                "height": 900,
+                "slotMinHeight": 50,
+                "eventMinHeight": 40,
+                "expandRows": True,
+                "nowIndicator": True,
+                "allDaySlot": False,
+            }
+
+            conflicts = st.session_state["last_weekly_scheduler"].detect_conflicts(weekly)
+            if conflicts:
+                with st.expander(f"⚠️ {len(conflicts)} scheduling conflict(s) detected — tasks overlap in time", expanded=True):
+                    for msg in conflicts:
+                        st.warning(msg)
+
+            if not events:
                 st.info("No tasks scheduled yet.")
             else:
-                # header row: Time | Pet | Mon | Tue | ...
-                header_cols = st.columns([1] + [2] * 7)
-                header_cols[0].markdown("**Time**")
-                for i, day in enumerate(days):
-                    header_cols[i + 1].markdown(f"**{day[:3]}**")
+                st.caption("Click an event to view details.")
+                st.markdown(
+                    """
+                    <style>
+                    iframe[title="streamlit_calendar.calendar"] {
+                        width: 100% !important;
+                        min-width: 100% !important;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                result = st_calendar(events=events, options=cal_options, key="weekly_cal")
+                if result and result.get("eventClick"):
+                    st.session_state["clicked_task"] = result["eventClick"]["event"]
+                    st.session_state["open_task_dialog"] = True
+                    st.rerun()
 
-                st.divider()
-
-                # one row per unique time slot
-                for time_slot in all_times:
-                    row_cols = st.columns([1] + [2] * 7)
-                    row_cols[0].markdown(f"`{time_slot}`")
-                    for i, day in enumerate(days):
-                        tasks_at_time = [t for t in weekly[day] if t.scheduled_time == time_slot]
-                        if tasks_at_time:
-                            for t in tasks_at_time:
-                                key = f"weekly_{t.name}_{t.pet_name}_{day}_{time_slot}"
-                                is_done = st.session_state.get(key, False)
-                                label = f"~~{t.name} [{t.pet_name}]~~" if is_done else f"{t.name} [{t.pet_name}]"
-                                row_cols[i + 1].checkbox(label, value=is_done, key=key)
-                        else:
-                            row_cols[i + 1].caption("—")
+                if st.session_state.pop("open_task_dialog", False):
+                    show_task_details()
 
