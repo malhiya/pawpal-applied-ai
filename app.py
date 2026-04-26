@@ -1,3 +1,4 @@
+import datetime
 import streamlit as st
 from pawpal_system import Task, Pet, Owner, Scheduler
 from streamlit_calendar import calendar as st_calendar
@@ -231,6 +232,85 @@ else:
         selected_pet_name = st.selectbox("Pet", [p.name for p in selected_owner.pets])
         selected_pet = next(p for p in selected_owner.pets if p.name == selected_pet_name)
 
+        with st.expander("✨ Smart Task Input", expanded=False):
+            st.caption(
+                "Describe tasks in plain English — one per line. "
+                "Priority, duration, and time are filled in automatically using pet care rules."
+            )
+            smart_input = st.text_area(
+                "Task descriptions",
+                placeholder="Give Max medication at 8am\nWalk Max after breakfast\nVet appointment next Tuesday",
+                key="smart_task_input",
+                height=110,
+                label_visibility="collapsed",
+            )
+            if st.button("Add Tasks", key="parse_tasks_btn", type="primary"):
+                if not smart_input.strip():
+                    st.warning("Enter at least one task description.")
+                else:
+                    try:
+                        from rag_helper import parse_tasks_with_rag
+                        parsed_tasks = parse_tasks_with_rag(smart_input.strip(), selected_pet_name)
+
+                        def _rag_task_window(t):
+                            s = datetime.datetime.strptime(t.scheduled_time, "%H:%M")
+                            return s, s + datetime.timedelta(minutes=t.duration_minutes)
+
+                        def _rag_dates_overlap(t1, t2):
+                            if not t1.start_date or not t2.start_date:
+                                return True
+                            s1 = datetime.date.fromisoformat(t1.start_date)
+                            e1 = datetime.date.fromisoformat(t1.end_date) if t1.end_date else s1
+                            s2 = datetime.date.fromisoformat(t2.start_date)
+                            e2 = datetime.date.fromisoformat(t2.end_date) if t2.end_date else s2
+                            return s1 <= e2 and s2 <= e1
+
+                        def _rag_find_conflict(new_task, check_against):
+                            n_start, n_end = _rag_task_window(new_task)
+                            for existing in check_against:
+                                if existing.is_complete:
+                                    continue
+                                if not _rag_dates_overlap(new_task, existing):
+                                    continue
+                                same_day = (
+                                    existing.frequency == "daily"
+                                    or new_task.frequency == "daily"
+                                    or existing.scheduled_day == new_task.scheduled_day
+                                )
+                                if not same_day:
+                                    continue
+                                ex_start, ex_end = _rag_task_window(existing)
+                                if n_start < ex_end and ex_start < n_end:
+                                    return existing
+                            return None
+
+                        all_existing = [t for pet in selected_owner.pets for t in pet.tasks]
+                        added, skipped, batch = [], [], []
+
+                        for new_task in parsed_tasks:
+                            conflict = _rag_find_conflict(new_task, all_existing + batch)
+                            if conflict:
+                                skipped.append((new_task, conflict))
+                            else:
+                                selected_pet.add_task(new_task)
+                                batch.append(new_task)
+                                added.append(new_task)
+
+                        if added:
+                            st.success(f"Added {len(added)} task(s) to {selected_pet_name}'s schedule.")
+                        for new_task, conflict in skipped:
+                            ex_s, ex_e = _rag_task_window(conflict)
+                            st.warning(
+                                f"'{new_task.name}' was skipped — conflicts with "
+                                f"'{conflict.name}' ({ex_s.strftime('%H:%M')}–{ex_e.strftime('%H:%M')}). "
+                                f"Edit the task to adjust its time."
+                            )
+                        if added:
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not parse tasks: {e}")
+
+        st.markdown("##### Or add a task manually")
         col1, col2, col3 = st.columns(3)
         with col1:
             task_title = st.text_input("Task title", value="Morning walk")
@@ -244,7 +324,6 @@ else:
         with col4:
             frequency = st.selectbox("Frequency", ["daily", "weekly"], disabled=single_day)
         with col5:
-            import datetime
             scheduled_time = st.time_input("Time", value=datetime.time(8, 0))
         with col6:
             days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
