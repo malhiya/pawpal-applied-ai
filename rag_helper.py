@@ -59,6 +59,7 @@ _MAX_TASK_LINES  = 20
 _CLEANUP_PATTERNS = [
     r"\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b",          # "at 8am", "at 8:30 pm"
     r"\bnext\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+    r"\bfrom\s+\d{1,2}/\d{1,2}(?:/\d{2,4})?\s+to\s+\d{1,2}/\d{1,2}(?:/\d{2,4})?\b",  # "from 5/01 to 5/30"
     r"\bafter\s+breakfast\b",
     r"\bafter\s+dinner\b",
     r"\bafter\s+lunch\b",
@@ -226,13 +227,40 @@ def _parse_scheduled_time(line: str) -> str:
     return "08:00"
 
 
+def _parse_date_str(date_str: str, today: datetime.date) -> datetime.date:
+    """Parse 'MM/DD' or 'MM/DD/YYYY' or 'MM/DD/YY' into a date. Assumes current year if omitted."""
+    parts = date_str.strip().split("/")
+    month, day = int(parts[0]), int(parts[1])
+    if len(parts) == 3:
+        year = int(parts[2])
+        if year < 100:
+            year += 2000
+    else:
+        year = today.year
+    return datetime.date(year, month, day)
+
+
 def _determine_schedule(line: str, tokens: set[str]) -> tuple[str, str, str, str]:
     """
     Returns (frequency, start_date, end_date, scheduled_day).
-    Handles 'next [weekday]' as a single-day event; defaults to daily recurring.
+    Handles explicit date ranges, 'next [weekday]', and defaults to daily recurring.
     """
     today = datetime.date.today()
 
+    # Explicit date range: "from 5/01 to 5/30" or "from 5/01/2026 to 5/30/2026"
+    date_range = re.search(
+        r"\bfrom\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?)\s+to\s+(\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b",
+        line, re.IGNORECASE,
+    )
+    if date_range:
+        try:
+            start = _parse_date_str(date_range.group(1), today)
+            end   = _parse_date_str(date_range.group(2), today)
+            return "daily", start.isoformat(), end.isoformat(), today.strftime("%A")
+        except (ValueError, IndexError):
+            pass
+
+    # "next [weekday]" — single-day one-time event
     for day_name in _DAYS_OF_WEEK:
         if re.search(rf"\bnext\s+{day_name}\b", line, re.IGNORECASE):
             days_ahead = ((_DAYS_OF_WEEK.index(day_name)) - today.weekday() + 7) % 7 or 7
