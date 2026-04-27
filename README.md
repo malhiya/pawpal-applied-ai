@@ -1,93 +1,244 @@
-# PawPal+ (Module 2 Project)
+# PawPal+ — AI-Powered Pet Care Scheduler
 
-You are building **PawPal+**, a Streamlit app that helps a pet owner plan care tasks for their pet.
+> A smart pet care planning app that turns plain-English task descriptions into a prioritized, conflict-free weekly schedule — powered by a lightweight RAG pipeline.
 
-## Scenario
+---
 
-A busy pet owner needs help staying consistent with pet care. They want an assistant that can:
+## Original Project (Modules 1–3)
 
-- Track pet care tasks (walks, feeding, meds, enrichment, grooming, etc.)
-- Consider constraints (time available, priority, owner preferences)
-- Produce a daily plan and explain why it chose that plan
+**PawPal+** began as a rule-based pet care scheduling app built in Modules 1–3. The original goal was to help busy pet owners stay on top of daily care tasks by letting them log tasks for each of their pets, set priorities and durations, and generate a daily plan that fits within their available time. The app supported conflict detection, recurring tasks, and a visual weekly calendar — all driven by hand-coded scheduling logic and a Streamlit UI. Module 4 extended this foundation by integrating a Retrieval-Augmented Generation (RAG) pipeline that allows users to describe tasks in plain English, which the system then parses, classifies, and converts into structured `Task` objects automatically.
 
-Your job is to design the system first (UML), then implement the logic in Python, then connect it to the Streamlit UI.
+---
 
-## What you will build
+## What PawPal+ Does and Why It Matters
 
-Your final app should:
+Managing care for one or more pets means tracking dozens of recurring tasks — medications that can't be skipped, walks that need to happen at specific times, grooming appointments, vet visits, and training sessions. Keeping all of this organized in a way that respects priorities and avoids scheduling conflicts is genuinely hard to do in a spreadsheet or a notes app.
 
-- Let a user enter basic owner + pet info
-- Let a user add/edit tasks (duration + priority at minimum)
-- Generate a daily schedule/plan based on constraints and priorities
-- Display the plan clearly (and ideally explain the reasoning)
-- Include tests for the most important scheduling behaviors
+PawPal+ solves this by letting owners describe their pet care tasks the way they'd say them out loud — "Give Luna her medication at 8am" or "Walk Max after breakfast" — and then automatically:
 
-## Features
+- Extracts the task name, priority, duration, category, and scheduled time
+- Flags conflicts when two tasks overlap on the same day
+- Builds a prioritized daily or weekly plan that respects what's non-negotiable vs. what can flex
+- Explains the scheduling decisions so the owner understands why tasks were included or deferred
 
-- **Priority-based scheduling** — tasks are sorted high → medium → low and greedily selected to fit within the owner's available time budget
-- **Plan explanation** — after generating a plan, the app explains why each task was included or skipped (priority + time fit)
-- **Daily recurrence** — completing a task automatically schedules its next occurrence one day later
-- **Weekly recurrence** — weekly tasks are pinned to a specific day and appear only on that day in the weekly view
-- **Weekly schedule view** — generates a full Mon–Sun schedule mapping each day to its sorted task list
-- **Sort by time** — any task list can be sorted by `scheduled_time` in ascending order
-- **Filter by pet** — narrow the schedule to a single pet or view all pets combined
-- **Conflict detection** — flags any two tasks under the same owner that share the same start time on the same day
+This matters because pet care failures (missed medications, skipped meals) have real consequences. A system that makes planning effortless — and warns you when something is wrong — helps owners be more consistent.
 
-## Smarter Scheduling
+---
 
-Additonal features are added for a more natural and cleaner task scheduling. Weekly schedule output allows for recurring tasks to show. Filtering a schedule by a Pet allows a user to see the schedule of an individual pet. Tasks can also be sorted by time. And task conflictions are detected for any pet under the same owner for tasks with the same starting time. 
+## Architecture Overview
 
-## Getting started
-
-### Setup
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+```
+┌─────────────────────────────────────────────────────┐
+│                  Streamlit UI (app.py)               │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
+│  │ Smart Input  │  │ Manual Form  │  │ Calendar  │  │
+│  │ (plain text) │  │ (structured) │  │ (weekly)  │  │
+│  └──────┬───────┘  └──────┬───────┘  └─────▲─────┘  │
+└─────────┼────────────────-┼────────────────┼─────────┘
+          │                 │                │
+          ▼                 │                │
+┌─────────────────────┐     │                │
+│   RAG Pipeline      │     │                │
+│   (rag_helper.py)   │     │                │
+│                     │     │                │
+│  1. Load KB         │     │                │
+│  2. Parse input     │     │                │
+│  3. Retrieve context│     │                │
+│  4. Classify task   │     │                │
+│  5. Build Task objs │     │                │
+└──────────┬──────────┘     │                │
+           │                │                │
+           ▼                ▼                │
+┌──────────────────────────────────────┐     │
+│        Core Domain (pawpal_system.py)│     │
+│  Task · Pet · Owner · Scheduler      │─────┘
+│                                      │
+│  generate_plan() → priority sort     │
+│  detect_conflicts() → overlap flags  │
+│  generate_weekly_schedule() → Mon-Sun│
+│  explain_plan() → human-readable why │
+└──────────────────────────────────────┘
+           │
+           ▼
+   knowledge_base.md
+   (33 domain rules for
+    priorities, durations,
+    and time defaults)
 ```
 
-### Suggested workflow
+**Data flow for Smart Input:** The user types one or more tasks in plain English → the RAG pipeline tokenizes the input and retrieves only the relevant lines from `knowledge_base.md` (e.g., medication rules for "give Luna her pills") → a rule-based classifier uses the retrieved context to assign priority, duration, category, and scheduled time → structured `Task` objects are added to the appropriate pet → the Scheduler sorts, validates, and renders the plan.
 
-1. Read the scenario carefully and identify requirements and edge cases.
-2. Draft a UML diagram (classes, attributes, methods, relationships).
-3. Convert UML into Python class stubs (no logic yet).
-4. Implement scheduling logic in small increments.
-5. Add tests to verify key behaviors.
-6. Connect your logic to the Streamlit UI in `app.py`.
-7. Refine UML so it matches what you actually built.
+**No external API calls.** The RAG layer uses keyword-based retrieval against a local markdown knowledge base, making the system fast, free to run, and deterministic.
 
-## Testing PawPal+
+---
 
-Run the full test suite from the project root:
+## Setup Instructions
+
+### Prerequisites
+
+- Python 3.9 or higher
+- `pip` (comes with Python)
+
+### Steps
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/malhiya/pawpal-applied-ai.git
+cd pawpal-applied-ai
+
+# 2. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Launch the app
+streamlit run app.py
+```
+
+The app will open automatically at `http://localhost:8501`.
+
+### Run the test suite
 
 ```bash
 python -m pytest tests/test_pawpal.py -v
 ```
 
-The tests cover:
+---
 
-- **Task completion** — marking a task complete updates its `is_complete` status
-- **Pet task list** — adding a task increases the pet's task count
-- **Sorting** — `sort_by_time` returns tasks in ascending chronological order
-- **Recurrence** — completing a daily task creates a new task scheduled for the next day
-- **Conflict detection** — `Scheduler.detect_conflicts` flags two tasks sharing the same time slot on the same day
-- **Zero time budget** — `generate_plan` skips all tasks and populates `skipped_tasks` when `available_minutes` is 0
-- **Double completion** — calling `complete_task` twice on the same task appends two future copies
-- **`next_occurrence` pet name** — `next_occurrence()` resets `pet_name` to `""`, requiring the caller to re-assign it via `add_task`
+## Sample Interactions
 
-### Confidence level
+### Example 1 — Smart Task Parsing (RAG Pipeline)
 
-**4/5** — Core scheduling behaviors (sorting, priority, conflict detection, recurrence) work correctly. However, two real bugs were found during testing: `complete_task` has no guard against being called twice, and `next_occurrence` silently drops the pet name. Additional silent failure modes exist for invalid frequency values and unknown scheduled days. Coverage gaps remain in multi-pet scenarios and the UI layer.
+**User types into the Smart Task Input box:**
 
-## Demo
+```
+Give Luna her medication at 8am
+Walk Max after breakfast
+Schedule grooming next Saturday
+Play session in the afternoon
+```
 
-<a href="weekly_schedule.png" target="_blank"><img src='weekly_schedule.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+**System output (parsed tasks added automatically):**
 
-<a href="build_schedule.png" target="_blank"><img src='build_schedule.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+| Task | Priority | Duration | Scheduled Time | Category |
+|------|----------|----------|----------------|----------|
+| Give Luna her medication | Non-negotiable | 5 min | 08:00 | Medication |
+| Walk Max | High | 30 min | 08:30 | Walk |
+| Grooming | Medium | 20 min | (next Saturday only) | Grooming |
+| Play session | Low | 20 min | 14:00 | Play |
 
-<a href="time_sort.png" target="_blank"><img src='time_sort.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+The RAG pipeline detects "medication" → retrieves the medication priority rule from the knowledge base → classifies as non-negotiable. "After breakfast" maps to the 08:30 time default. "Next Saturday" is recognized as a one-time event rather than a recurring task.
 
-<a href="tasks.png" target="_blank"><img src='tasks.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+---
 
-<a href="owners.png" target="_blank"><img src='owners.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+### Example 2 — Building and Explaining a Schedule
+
+**User clicks "Build Schedule" with 90 minutes available.**
+
+**System output:**
+
+```
+Your plan for today:
+
+1. [NON-NEGOTIABLE] Give Luna her medication — 5 min @ 08:00
+2. [HIGH] Walk Max — 30 min @ 08:30
+3. [MEDIUM] Grooming — 20 min (unscheduled)
+4. [LOW] Play session — 20 min @ 14:00
+
+Time used: 75 min / 90 min available
+
+Explanation:
+✓ Medication included — non-negotiable, always scheduled first.
+✓ Walk Max included — high priority, fits within available time.
+✓ Grooming included — medium priority, fits within remaining time.
+✓ Play session included — low priority, fits within remaining time.
+```
+
+---
+
+### Example 3 — Conflict Detection
+
+**User adds two tasks that overlap:**
+- "Vet appointment at 10:00am" (60 min)
+- "Grooming at 10:00am" (20 min)
+
+**System output (warning displayed in UI):**
+
+```
+⚠ Conflict detected:
+  • "Vet appointment" and "Grooming" are both scheduled at 10:00 on the same day.
+  Please adjust one of these tasks to resolve the overlap.
+```
+
+The conflict is surfaced immediately in the weekly calendar view with a warning banner, giving the owner the chance to reschedule before the day begins.
+
+---
+
+## Design Decisions
+
+### 1. Lightweight RAG over an LLM API
+
+**Decision:** The RAG pipeline uses keyword-based retrieval against a local markdown knowledge base instead of calling an LLM (e.g., GPT-4 or Claude).
+
+**Why:** Pet care task classification is a well-scoped problem with a small, enumerable domain. A knowledge base of 33 rules captures everything that matters — medication priority, duration defaults, time-of-day mappings — without the latency, cost, or unpredictability of an API call. The rule-based classifier on top of retrieved context is fully deterministic, easy to debug, and requires zero credentials to run.
+
+**Trade-off:** The system can't handle truly ambiguous or novel phrasing. "Do the thing Luna needs in the morning" won't parse as a medication task. An LLM would handle this gracefully; the keyword retriever won't. For the current scope this is acceptable — the manual form is always available as a fallback.
+
+### 2. In-Memory State (No Database)
+
+**Decision:** All owner, pet, and task data lives in Streamlit's `session_state`. Nothing is persisted to disk.
+
+**Why:** Avoiding a database removes an entire class of infrastructure complexity — no schema migrations, no connection management, no data serialization bugs. For a portfolio project and early-stage MVP this is the right call; it lets the scheduling logic and RAG pipeline stay front and center.
+
+**Trade-off:** Data is lost on page refresh. A real production version would need at least local JSON persistence or a lightweight SQLite store. This is a known and intentional gap, not an oversight.
+
+### 3. Priority as an Ordered Enum
+
+**Decision:** Tasks are classified into four tiers — `non-negotiable`, `high`, `medium`, `low` — rather than a numeric score.
+
+**Why:** Named tiers map directly to how pet owners actually think about their tasks. "Medication" is categorically different from "play session" — not just numerically lower. Named tiers also make the plan explanation human-readable without translation.
+
+**Trade-off:** Within a tier, there's no further ordering. Two `high` priority tasks are treated as equal and ordered by insertion. A numeric score (0–100) would give finer control but would require more calibration work and make explanations harder to read.
+
+### 4. Streamlit as the UI Framework
+
+**Decision:** The entire frontend is built in Streamlit rather than Flask + HTML/CSS or a React frontend.
+
+**Why:** Streamlit lets Python code drive the UI directly, which means the domain logic and the UI stay in the same language and the same mental model. For a scheduling app where state transitions (add task → rebuild schedule → update calendar) are the core interaction loop, Streamlit's reactive rerun model is a natural fit.
+
+**Trade-off:** Streamlit's component model is less flexible than a custom frontend. Modal dialogs require workarounds, and advanced calendar interactions (drag-to-reschedule, inline editing) are difficult or impossible. The `streamlit-calendar` widget covers the use cases needed here, but a production version with richer UX would likely need a dedicated frontend.
+
+### 5. Human Review Over Auto-Resolution
+
+**Decision:** When the system detects a conflict or is uncertain about a classification, it flags it for the user rather than silently resolving it.
+
+**Why:** Pet care mistakes have real consequences. A system that silently drops a medication task to resolve a conflict is worse than one that asks the owner to decide. Surfacing ambiguity keeps the human in the loop on decisions that matter.
+
+**Trade-off:** More friction for the user in the happy path. An owner managing a large task list may find repeated conflict warnings annoying. Future work could add smarter auto-resolution (e.g., suggest the next available time slot) while still requiring confirmation for non-negotiable tasks.
+
+---
+
+## Testing Summary
+
+*Coming soon.*
+
+---
+
+## Reflection
+
+*Coming soon.*
+
+---
+
+## Screenshots
+
+| Weekly Calendar | Build Schedule | Task List |
+|----------------|---------------|-----------|
+| ![Weekly Schedule](weekly_schedule.png) | ![Build Schedule](build_schedule.png) | ![Tasks](tasks.png) |
+
+| Sort by Time | Owner & Pet Setup |
+|-------------|-------------------|
+| ![Time Sort](time_sort.png) | ![Owners](owners.png) |

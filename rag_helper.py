@@ -53,6 +53,9 @@ _DEFAULT_DURATIONS: dict[str, int] = {
 }
 
 # Patterns stripped from the raw input when building a clean task name
+_MAX_INPUT_CHARS = 2000
+_MAX_TASK_LINES  = 20
+
 _CLEANUP_PATTERNS = [
     r"\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b",          # "at 8am", "at 8:30 pm"
     r"\bnext\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
@@ -288,28 +291,92 @@ def build_schedule(classified_tasks: list[dict]) -> list[Task]:
             scheduled_day=td["scheduled_day"],
             start_date=td["start_date"],
             end_date=td["end_date"],
+            pet_name=td.get("detected_pet", ""),
         )
         for td in classified_tasks
     ]
 
 
+# ── Input guardrails ──────────────────────────────────────────────────────────
+
+def find_lines_missing_pet_name(lines: list[str], pet_names: list[str]) -> list[str]:
+    """
+    Return every line that contains none of the known pet names.
+    Used in All Pets mode to catch ambiguous input before the pipeline runs.
+    """
+    return [
+        line for line in lines
+        if not any(
+            re.search(rf"\b{re.escape(name.lower())}\b", line.lower())
+            for name in pet_names
+        )
+    ]
+
+
+def validate_raw_input(text: str) -> tuple[str, list[str]]:
+    """
+    Cap input size before it enters the pipeline.
+    Returns (sanitized_text, warnings) so callers can surface what was trimmed.
+    """
+    warnings: list[str] = []
+
+    if len(text) > _MAX_INPUT_CHARS:
+        text = text[:_MAX_INPUT_CHARS]
+        warnings.append(
+            f"Input was too long and has been truncated to {_MAX_INPUT_CHARS} characters. "
+            "Please split large batches into multiple submissions."
+        )
+
+    lines = [l for l in text.splitlines() if l.strip()]
+    if len(lines) > _MAX_TASK_LINES:
+        lines = lines[:_MAX_TASK_LINES]
+        warnings.append(
+            f"Only the first {_MAX_TASK_LINES} tasks were processed. "
+            "Please submit remaining tasks separately."
+        )
+        text = "\n".join(lines)
+
+    return text, warnings
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
-def parse_tasks_with_rag(raw_input: str, pet_name: str) -> list[Task]:
+def parse_tasks_with_rag(
+    raw_input: str,
+    pet_name: str,
+    pet_names: list[str] | None = None,
+) -> tuple[list[Task], list[str]]:
     """
     Full RAG pipeline:
-      1. load_knowledge_base  — load KB rule lines from disk
-      2. parse_input          — split text into individual task lines
-      3. retrieve_context     — keyword-match each line against the KB
-      4. classify_task        — rule-based classification using retrieved lines only
-      5. build_schedule       — assemble Task dataclasses
+      1. validate_raw_input   — cap input length and line count (guardrail)
+      2. load_knowledge_base  — load KB rule lines from disk
+      3. parse_input          — split text into individual task lines
+      4. retrieve_context     — keyword-match each line against the KB
+      5. classify_task        — rule-based classification using retrieved lines only
+      6. build_schedule       — assemble Task dataclasses
+
+    Returns (tasks, warnings). Warnings are user-facing messages about input that
+    was trimmed or corrected by the guardrail.
+
+    When pet_names is provided (All Pets mode), each task line is scanned for a
+    matching pet name and tagged with detected_pet so the caller can route it to
+    the right pet.
     """
+    raw_input, warnings = validate_raw_input(raw_input)
+
     kb         = load_knowledge_base()
     task_lines = parse_input(raw_input)
 
-    classified = [
-        classify_task(line, retrieve_context(line, kb))
-        for line in task_lines
-    ]
+    classified = []
+    for line in task_lines:
+        result = classify_task(line, retrieve_context(line, kb))
+        if pet_names:
+            line_lower = line.lower()
+            result["detected_pet"] = next(
+                (name for name in pet_names
+                 if re.search(rf"\b{re.escape(name.lower())}\b", line_lower)),
+                None,
+            )
+        classified.append(result)
 
-    return build_schedule(classified)
+    return build_schedule(classified), warnings
