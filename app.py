@@ -218,7 +218,6 @@ with st.expander("Scenario", expanded=True):
 **PawPal+** is a pet care planning assistant. It helps a pet owner plan care tasks
 for their pet(s) based on constraints like time, priority, and preferences.
 
-You will design and implement the scheduling logic and connect it to this Streamlit UI.
 """
     )
 
