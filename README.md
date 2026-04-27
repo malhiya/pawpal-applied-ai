@@ -223,7 +223,7 @@ The conflict is surfaced immediately in the weekly calendar view with a warning 
 
 ## Testing Summary
 
-*Coming soon.*
+The test suite validated the core scheduling and RAG pipeline logic, confirming that tasks are correctly parsed, prioritized, and conflict-detected across a range of inputs. Priority classification and conflict detection worked reliably for well-formed inputs, and the RAG retrieval accurately matched keyword-rich phrases like "medication" and "walk" to the correct knowledge base rules. The main limitation uncovered was the keyword retriever's inability to handle ambiguous or unconventional phrasing — inputs like "do Luna's morning thing" produced no match, confirming the trade-off documented in the design decisions. This reinforced that the manual input form is a necessary fallback and that an LLM-backed parser would be needed to handle open-ended natural language robustly.
 
 ---
 
