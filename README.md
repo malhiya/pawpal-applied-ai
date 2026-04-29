@@ -214,12 +214,4 @@ See [model_card.md — Reflections](model_card.md#reflections) for a full discus
 
 ---
 
-## Screenshots
 
-| Weekly Calendar | Build Schedule | Task List |
-|----------------|---------------|-----------|
-| ![Weekly Schedule](pawpal_v1_docs/weekly_schedule.png) | ![Build Schedule](pawpal_v1_docs/build_schedule.png) | ![Tasks](pawpal_v1_docs/tasks.png) |
-
-| Sort by Time | Owner & Pet Setup |
-|-------------|-------------------|
-| ![Time Sort](pawpal_v1_docs/time_sort.png) | ![Owners](pawpal_v1_docs/owners.png) |
