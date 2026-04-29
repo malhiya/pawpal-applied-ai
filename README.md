@@ -114,7 +114,9 @@ python -m pytest tests/ -v
 
 ## Sample Interactions
 
-### Example 1 — Smart Task Parsing (RAG Pipeline)
+![App Walkthrough](walkthrough.gif)
+
+### Sample 1 — Smart Task Parsing (RAG Pipeline)
 
 **User types into the Smart Task Input box:**
 
@@ -138,7 +140,7 @@ The RAG pipeline detects "medication" → retrieves the medication priority rule
 
 ---
 
-### Example 2 — Conflict Detection
+### Sample 2 — Conflict Detection
 
 **User adds two tasks that overlap:**
 - "Vet appointment at 10:00am" (60 min)
