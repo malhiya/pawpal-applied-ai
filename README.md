@@ -116,7 +116,28 @@ python -m pytest tests/ -v
 
 ![App Walkthrough](walkthrough.gif)
 
-### Sample 1 — Smart Task Parsing (RAG Pipeline)
+### Sample 1 — Guardrail: Missing Pet Name (All Pets Mode)
+
+**User selects "All Pets" and types:**
+
+```
+Give Luna her medication at 8am
+Walk Max after breakfast
+Give the dog a bath on Saturday
+```
+
+**System output (error displayed, nothing is processed):**
+
+```
+Each task must mention a pet name (Luna, Max). The following line didn't match any pet:
+• Give the dog a bath on Saturday
+```
+
+The pipeline is blocked entirely before any task is parsed. Unlike conflict detection (which runs after parsing), this guardrail is a pre-pipeline gate — it checks every line for a known pet name and stops the whole batch if any line is ambiguous. The user must fix the input ("Give Luna a bath on Saturday") and resubmit before anything is added.
+
+---
+
+### Sample 2 — Smart Task Parsing (RAG Pipeline)
 
 **User types into the Smart Task Input box:**
 
