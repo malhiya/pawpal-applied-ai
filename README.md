@@ -107,7 +107,7 @@ The app will open automatically at `http://localhost:8501`.
 ### Run the test suite
 
 ```bash
-python -m pytest tests/test_pawpal.py -v
+python -m pytest tests/ -v
 ```
 
 ---
@@ -233,7 +233,7 @@ The test suite validated the core scheduling and RAG pipeline logic, confirming 
 
 ## Reflection
 
-*Coming soon.*
+See [model_card.md — Reflections](model_card.md#reflections) for a full discussion of how AI was used during development, one helpful and one flawed Claude suggestion, observed system limitations, and ideas for improvement.
 
 ---
 

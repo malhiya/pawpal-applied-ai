@@ -49,7 +49,7 @@ def test_complete_daily_task_creates_next_day_occurrence():
 
     assert task.is_complete is True
     assert new_task.is_complete is False
-    assert new_task.scheduled_date == expected_date
+    assert new_task.start_date == expected_date
     assert new_task.pet_name == "Buddy"
 
 
