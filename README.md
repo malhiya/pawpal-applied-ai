@@ -138,32 +138,7 @@ The RAG pipeline detects "medication" → retrieves the medication priority rule
 
 ---
 
-### Example 2 — Building and Explaining a Schedule
-
-**User clicks "Build Schedule" with 90 minutes available.**
-
-**System output:**
-
-```
-Your plan for today:
-
-1. [NON-NEGOTIABLE] Give Luna her medication — 5 min @ 08:00
-2. [HIGH] Walk Max — 30 min @ 08:30
-3. [MEDIUM] Grooming — 20 min (unscheduled)
-4. [LOW] Play session — 20 min @ 14:00
-
-Time used: 75 min / 90 min available
-
-Explanation:
-✓ Medication included — non-negotiable, always scheduled first.
-✓ Walk Max included — high priority, fits within available time.
-✓ Grooming included — medium priority, fits within remaining time.
-✓ Play session included — low priority, fits within remaining time.
-```
-
----
-
-### Example 3 — Conflict Detection
+### Example 2 — Conflict Detection
 
 **User adds two tasks that overlap:**
 - "Vet appointment at 10:00am" (60 min)
