@@ -161,7 +161,7 @@ The RAG pipeline detects "medication" → retrieves the medication priority rule
 
 ---
 
-### Sample 2 — Conflict Detection
+### Sample 3 — Conflict Detection
 
 **User adds two tasks that overlap:**
 - "Vet appointment at 10:00am" (60 min)
