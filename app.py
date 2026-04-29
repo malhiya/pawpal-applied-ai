@@ -150,6 +150,62 @@ def show_task_details():
             st.session_state[event_id] = True
             st.rerun()
 
+@st.dialog("Edit Owner & Pets")
+def show_edit_owner_dialog():
+    owner = st.session_state.get("editing_owner_for_names")
+    if owner is None:
+        st.warning("No owner selected.")
+        return
+
+    new_owner_name = st.text_input("Owner name", value=owner.name, key="edit_owner_name_input")
+
+    new_pet_names = []
+    new_pet_species = []
+    if owner.pets:
+        st.markdown("**Pets:**")
+        for i, pet in enumerate(owner.pets):
+            col_name, col_species = st.columns([2, 1])
+            with col_name:
+                new_pet_names.append(
+                    st.text_input(f"Pet {i + 1} name", value=pet.name, key=f"edit_pet_name_{i}")
+                )
+            with col_species:
+                species_opts = ["dog", "cat"]
+                cur_idx = species_opts.index(pet.species) if pet.species in species_opts else 2
+                new_pet_species.append(
+                    st.selectbox(f"Species", species_opts, index=cur_idx, key=f"edit_pet_species_{i}")
+                )
+
+    col_save, col_cancel = st.columns(2)
+    save = col_save.button("Save", type="primary", use_container_width=True)
+    cancel = col_cancel.button("Cancel", use_container_width=True)
+
+    if save:
+        if not new_owner_name.strip():
+            st.error("Owner name cannot be empty.")
+            return
+        for name in new_pet_names:
+            if not name.strip():
+                st.error("Pet name cannot be empty.")
+                return
+
+        owner.name = new_owner_name.strip()
+        for i, pet in enumerate(owner.pets):
+            new_name = new_pet_names[i].strip()
+            if pet.name != new_name:
+                for task in pet.tasks:
+                    task.pet_name = new_name
+                pet.name = new_name
+            pet.species = new_pet_species[i]
+
+        st.session_state.editing_owner_for_names = None
+        st.rerun()
+
+    if cancel:
+        st.session_state.editing_owner_for_names = None
+        st.rerun()
+
+
 @st.dialog("Confirm Delete")
 def show_delete_confirmation():
     pet  = st.session_state.get("deleting_pet")
@@ -226,7 +282,7 @@ st.divider()
 st.subheader("Owner and Pets")
 owner_name = st.text_input("Owner name", value="Jordan")
 pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+species = st.selectbox("Species", ["dog", "cat"])
 
 if "owners" not in st.session_state:
     st.session_state.owners = []
@@ -242,11 +298,20 @@ if st.button("Create Owner & Pet"):
         new_owner.add_pet(pet)
         st.session_state.owners.append(new_owner)
 
+if "editing_owner_for_names" not in st.session_state:
+    st.session_state.editing_owner_for_names = None
+
 if st.session_state.owners:
     st.write("**Saved owners:**")
-    for o in st.session_state.owners:
+    for idx, o in enumerate(st.session_state.owners):
         pet_names = ", ".join(p.name for p in o.pets)
-        st.write(f"- {o.name} — pets: {pet_names}")
+        col_text, col_btn = st.columns([5, 1])
+        with col_text:
+            st.write(f"- {o.name} — pets: {pet_names}")
+        with col_btn:
+            if st.button("Edit", key=f"edit_owner_{idx}"):
+                st.session_state.editing_owner_for_names = o
+                show_edit_owner_dialog()
 else:
     st.info("No owners yet.")
 
@@ -317,9 +382,9 @@ else:
                                     + "\n".join(f"• {l}" for l in missing)
                                 )
                                 st.stop()
-                            parsed_tasks, rag_warnings = parse_tasks_with_rag(smart_input.strip(), "All Pets", pet_names=all_pet_names)
+                            parsed_tasks, rag_warnings = parse_tasks_with_rag(smart_input.strip(), "All Pets", pet_names=all_pet_names, existing_tasks=[t for p in selected_owner.pets for t in p.tasks])
                         else:
-                            parsed_tasks, rag_warnings = parse_tasks_with_rag(smart_input.strip(), selected_pet_name)
+                            parsed_tasks, rag_warnings = parse_tasks_with_rag(smart_input.strip(), selected_pet_name, existing_tasks=[t for p in selected_owner.pets for t in p.tasks])
                         for w in rag_warnings:
                             st.warning(w)
 
@@ -584,6 +649,7 @@ else:
 
         st.divider()
         st.subheader("Weekly Planner")
+        st.caption("Press **Generate weekly schedule** after adding new tasks to update the calendar.")
 
         weekly_owner_name = st.selectbox("Owner", [o.name for o in st.session_state.owners], key="weekly_owner_filter")
         weekly_owner = next(o for o in st.session_state.owners if o.name == weekly_owner_name)

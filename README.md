@@ -1,6 +1,6 @@
 # PawPal+ — AI-Powered Pet Care Scheduler
 
-> A smart pet care planning app that turns plain-English task descriptions into a prioritized, conflict-free weekly schedule — powered by a lightweight RAG pipeline.
+> A smart pet care planning app that turns plain-English task descriptions into a prioritized, conflict-free weekly schedule — powered by a RAG pipeline backed by Groq (Llama 3).
 
 ---
 
@@ -66,9 +66,9 @@ This matters because pet care failures (missed medications, skipped meals) have 
     and time defaults)
 ```
 
-**Data flow for Smart Input:** The user types one or more tasks in plain English → the RAG pipeline tokenizes the input and retrieves only the relevant lines from `knowledge_base.md` (e.g., medication rules for "give Luna her pills") → a rule-based classifier uses the retrieved context to assign priority, duration, category, and scheduled time → structured `Task` objects are added to the appropriate pet → the Scheduler sorts, validates, and renders the plan.
+**Data flow for Smart Input:** The user types one or more tasks in plain English → the RAG pipeline tokenizes the input and retrieves only the relevant lines from `knowledge_base.md` (e.g., medication rules for "give Luna her pills") → the retrieved context is sent to **Groq (Llama 3)** which uses it to classify priority, category, and reason → deterministic helpers handle dates, times, and schedule parsing → structured `Task` objects are added to the appropriate pet → the Scheduler sorts, validates, and renders the plan.
 
-**No external API calls.** The RAG layer uses keyword-based retrieval against a local markdown knowledge base, making the system fast, free to run, and deterministic.
+**Groq API (free tier).** The classification step calls `llama3-8b-8192` via Groq. If the API key is missing or the call fails, the pipeline silently falls back to the original keyword-based classifier so the app always works.
 
 ---
 
@@ -94,7 +94,11 @@ source .venv/bin/activate        # macOS / Linux
 # 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Launch the app
+# 4. Add your Groq API key
+cp .env.example .env        # then paste your key inside
+# Get a free key at https://console.groq.com
+
+# 5. Launch the app
 streamlit run app.py
 ```
 
@@ -179,13 +183,13 @@ The conflict is surfaced immediately in the weekly calendar view with a warning 
 
 ## Design Decisions
 
-### 1. Lightweight RAG over an LLM API
+### 1. RAG with Groq (Llama 3)
 
-**Decision:** The RAG pipeline uses keyword-based retrieval against a local markdown knowledge base instead of calling an LLM (e.g., GPT-4 or Claude).
+**Decision:** The RAG pipeline retrieves relevant rules from `knowledge_base.md` using keyword matching, then passes those rules to **Llama 3 via the Groq API** to classify priority, category, and reasoning for each task.
 
-**Why:** Pet care task classification is a well-scoped problem with a small, enumerable domain. A knowledge base of 33 rules captures everything that matters — medication priority, duration defaults, time-of-day mappings — without the latency, cost, or unpredictability of an API call. The rule-based classifier on top of retrieved context is fully deterministic, easy to debug, and requires zero credentials to run.
+**Why:** This is genuine RAG — the LLM only sees the rules relevant to the specific task, not the full knowledge base. Groq's free tier (`llama3-8b-8192`) makes this zero-cost for development. The LLM handles ambiguous phrasing that the old keyword classifier couldn't, while the retrieved context keeps it grounded in the domain rules.
 
-**Trade-off:** The system can't handle truly ambiguous or novel phrasing. "Do the thing Luna needs in the morning" won't parse as a medication task. An LLM would handle this gracefully; the keyword retriever won't. For the current scope this is acceptable — the manual form is always available as a fallback.
+**Trade-off:** Adds an external dependency and a small amount of latency per task. If the API key is missing or the call fails, the pipeline falls back to the original rule-based classifier silently — so the app remains fully functional without a key.
 
 ### 2. In-Memory State (No Database)
 
@@ -237,8 +241,8 @@ The test suite validated the core scheduling and RAG pipeline logic, confirming 
 
 | Weekly Calendar | Build Schedule | Task List |
 |----------------|---------------|-----------|
-| ![Weekly Schedule](weekly_schedule.png) | ![Build Schedule](build_schedule.png) | ![Tasks](tasks.png) |
+| ![Weekly Schedule](pawpal_v1_docs/weekly_schedule.png) | ![Build Schedule](pawpal_v1_docs/build_schedule.png) | ![Tasks](pawpal_v1_docs/tasks.png) |
 
 | Sort by Time | Owner & Pet Setup |
 |-------------|-------------------|
-| ![Time Sort](time_sort.png) | ![Owners](owners.png) |
+| ![Time Sort](pawpal_v1_docs/time_sort.png) | ![Owners](pawpal_v1_docs/owners.png) |

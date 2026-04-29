@@ -30,3 +30,13 @@ Lunchtime tasks default to scheduled time 12:00.
 Next weekday means the upcoming occurrence of that day after today — it is a one-time event.
 Two tasks cannot overlap in scheduled time on the same day — conflicting tasks must be adjusted by changing time or duration.
 If a task conflicts with an existing task, it should be skipped and the user should be notified to adjust the time.
+Dogs should be groomed every 4 to 8 weeks — frequency depends on breed and coat length.
+Long-haired dogs require brushing several times a week to prevent matting and tangles.
+Short-haired dogs require brushing once a week to remove loose fur and keep the coat healthy.
+Dogs should be bathed every 4 to 8 weeks unless they get dirty or have a skin condition.
+Dog nails should be trimmed every 3 to 4 weeks to prevent overgrowth and discomfort.
+Cats generally groom themselves but long-haired cats benefit from brushing every 1 to 2 days.
+Short-haired cats should be brushed once a week to reduce shedding and hairballs.
+Cats rarely need baths unless medically necessary or they cannot groom themselves.
+Cat nails should be trimmed every 2 to 3 weeks to prevent scratching and overgrowth.
+Regular ear cleaning and dental care are part of grooming for both dogs and cats.
